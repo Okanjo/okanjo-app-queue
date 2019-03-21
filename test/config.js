@@ -1,6 +1,6 @@
 
 // For unit testing, pull env config from env vars
-const host = process.env.RABBIT_HOST || '192.168.99.100';
+const host = process.env.RABBIT_HOST || 'localhost';
 const port = process.env.RABBIT_PORT || 5672;
 const login = process.env.RABBIT_USER || 'test';
 const password = process.env.RABBIT_PASS || 'test';

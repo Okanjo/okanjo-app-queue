@@ -150,6 +150,7 @@ class QueueWorker extends OkanjoWorker {
     _handleTagChangeEvent(event) {
         /* istanbul ignore else: not my consumer, not my problem, that's what i say */
         if (this._consumerTag === event.oldConsumerTag) {
+            // noinspection JSUnusedGlobalSymbols
             this._consumerTag = event.consumerTag;
             this._unsubscribe(event.oldConsumerTag, () => {
                 this.log(`!! Consumer tag for queue ${this.queueName} changed`);
@@ -165,6 +166,7 @@ class QueueWorker extends OkanjoWorker {
     onSubscribed(callback, res) {
         this.log(` > Subscribed to the ${this.queueName} queue`);
         this._isSubscribed = true;
+        // noinspection JSUnusedGlobalSymbols
         this._consumerTag = res.consumerTag;
 
         // Notify anyone who's waiting for the subscriber to finish
@@ -246,6 +248,7 @@ class QueueWorker extends OkanjoWorker {
                 }
             });
         } else {
+            // noinspection JSUnusedGlobalSymbols
             this._recovering = true;
 
             // Our connection was probably lost (ETIMEDOUT) but we're not going to resubscribe automatically, so let's do that.
@@ -268,12 +271,14 @@ class QueueWorker extends OkanjoWorker {
                         }
 
                         // Handle duplicate errors while recovery was in progress
+                        // noinspection JSUnusedGlobalSymbols
                         this._recovering = false;
                         this._recoverHooks.forEach((hook) => hook(subscribeErr));
                     });
                 } else {
                     // Our consumer was replaced, so we're all done
                     this._isSubscribed = true;
+                    // noinspection JSUnusedGlobalSymbols
                     this._recovering = false;
                     this._recoverHooks.forEach((hook) => hook());
                 }
@@ -360,7 +365,7 @@ class QueueWorker extends OkanjoWorker {
     /**
      * Starts the internal shutdown process (hook point)
      */
-    prepareForShutdown(canAsync) {
+    prepareForShutdown(canAsync) { /* eslint-disable-line no-unused-vars */
 
         this.log(` !! Shutting down the ${this.queueName} queue`);
 

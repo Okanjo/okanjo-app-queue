@@ -138,7 +138,7 @@ class BatchQueueWorker extends QueueWorker {
      * @param reject
      * @param requeue
      */
-    onMessageHandled(reject, requeue) {
+    onMessageHandled(reject, requeue) { /* eslint-disable-line no-unused-vars */
         throw new Error('This method does not apply to this worker. Do not use it.');
     }
 
@@ -154,7 +154,7 @@ class BatchQueueWorker extends QueueWorker {
      * @param [deliveryInfo] - Raw message info
      * @param [messageObject] - Message object wrapper (e.g. messageObject.acknowedge(false) )
      */
-    handleMessage(message, callback, headers, deliveryInfo, messageObject) {
+    handleMessage(message, callback, headers, deliveryInfo, messageObject) { /* eslint-disable-line no-unused-vars */
         throw new Error('This method does not apply to this worker. Do not use it.');
     }
 
@@ -162,7 +162,7 @@ class BatchQueueWorker extends QueueWorker {
     /**
      * Starts the internal shutdown process (hook point)
      */
-    prepareForShutdown(canAsync) {
+    prepareForShutdown(canAsync) { /* eslint-disable-line no-unused-vars */
 
         this.log(` !! Shutting down the ${this.queueName} queue`);
 

@@ -78,7 +78,7 @@ describe('QueueService', () => {
             queue.purge().addCallback(function(res) {
 
                 if (res.messageCount)
-                    console.log(`Purged ${res.messageCount} messages from the ${queueName} queue`);
+                    console.log(`Purged ${res.messageCount} messages from the ${queueName} queue`); /* eslint-disable-line no-console */
 
                 // Create a consumer
                 queue.subscribe({ ack: true, prefetchCount: 1 }, function(message) {
