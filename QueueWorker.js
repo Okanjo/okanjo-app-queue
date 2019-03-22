@@ -257,7 +257,7 @@ class QueueWorker extends OkanjoWorker {
             // If there's a message in the works, wait for it to end
             try {
                 await this.service.broker.shutdown();
-            } catch (err) {
+            } catch (err) /* istanbul ignore next: faking this is unreliable */ {
                 await this.app.report('QueueWorker: Failed to shutdown broker', err, {
                     subscription: this.subscriptionName
                 });

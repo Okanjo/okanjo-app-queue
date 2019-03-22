@@ -415,14 +415,6 @@ describe('QueueWorker', () => {
 
     describe('prepareForShutdown', () => {
 
-        before(async () => {
-            await app.services.queue.broker.purge();
-        });
-
-        after(async () => {
-            await app.services.queue.broker.purge();
-        });
-
         it('should prepareForShutdown', async () => {
 
             const worker = new QueueWorker(app, {
@@ -436,38 +428,6 @@ describe('QueueWorker', () => {
                     resolve();
                 }, 100);
             });
-
-        });
-
-        it('should prepareForShutdown a second time for fun', async () => {
-
-            const handler = function(err) {
-                console.log('ATE', err);    // eslint-disable-line no-console
-            };
-
-            process.once('uncaughtException', handler);
-
-
-            const worker = new QueueWorker(app, {
-                subscriptionName: 'unittests',
-                service: app.services.queue
-            });
-
-            await new Promise((resolve) => {
-                setTimeout(async () => {
-                    worker.prepareForShutdown();
-                    resolve();
-                }, 100);
-            });
-
-            await new Promise((resolve) => {
-                setTimeout(async () => {
-                    worker.prepareForShutdown();
-                    resolve();
-                }, 100);
-            });
-
-            process.off('uncaughtException', handler);
 
         });
 
