@@ -14,6 +14,14 @@ describe('QueueWorker', () => {
     /** @type {OkanjoApp} */
     let app;
 
+    const purge = async () => {
+        try {
+            await app.services.queue.broker.purge();
+        } catch (e) {
+            // ¯\_(ツ)_/¯
+        }
+    };
+
     before(async () => {
 
         // Create the app instance
@@ -34,9 +42,7 @@ describe('QueueWorker', () => {
 
     describe('constructor', () => {
 
-        after(async () => {
-            await app.services.queue.broker.purge();
-        });
+        after(purge);
 
         it('throws when subscriptionName is missing', () => {
             (() => { new QueueWorker(app, {}); }).should.throw(/subscriptionName/);
@@ -125,9 +131,7 @@ describe('QueueWorker', () => {
 
     describe('subscribe', () => {
 
-        afterEach(async () => {
-            await app.services.queue.broker.purge();
-        });
+        afterEach(purge);
 
         it('refuses to subscribe a second time', async () => {
             const worker = new QueueWorker(app, {
@@ -179,13 +183,9 @@ describe('QueueWorker', () => {
 
     describe('onRedeliveriesExceeded', () => {
 
-        before(async () => {
-            await app.services.queue.broker.purge();
-        });
+        before(purge);
 
-        afterEach(async () => {
-            await app.services.queue.broker.purge();
-        });
+        afterEach(purge);
 
         it('should exceed deliveries', async function() {
             this.timeout(5000);
@@ -252,13 +252,9 @@ describe('QueueWorker', () => {
 
     describe('onInvalidContent', () => {
 
-        before(async () => {
-            await app.services.queue.broker.purge();
-        });
+        before(purge);
 
-        afterEach(async () => {
-            await app.services.queue.broker.purge();
-        });
+        afterEach(purge);
 
         it('should toss messages with bad content', async function() {
             this.timeout(5000);
@@ -310,13 +306,9 @@ describe('QueueWorker', () => {
 
     describe('onSubscriptionError', () => {
 
-        before(async () => {
-            await app.services.queue.broker.purge();
-        });
+        before(purge);
 
-        afterEach(async () => {
-            await app.services.queue.broker.purge();
-        });
+        afterEach(purge);
 
         it('should report subscription errors', async function() {
             this.timeout(5000);
@@ -380,13 +372,9 @@ describe('QueueWorker', () => {
 
     describe('unsubscribe', () => {
 
-        before(async () => {
-            await app.services.queue.broker.purge();
-        });
+        before(purge);
 
-        after(async () => {
-            await app.services.queue.broker.purge();
-        });
+        after(purge);
 
         it('should ignore a double unsubscribe', async () => {
             const worker = new QueueWorker(app, {

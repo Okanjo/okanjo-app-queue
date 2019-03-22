@@ -13,6 +13,14 @@ describe('BatchQueueWorker', () => {
     /** @type {OkanjoApp} */
     let app;
 
+    const purge = async () => {
+        try {
+            await app.services.queue.broker.purge();
+        } catch (e) {
+            // ¯\_(ツ)_/¯
+        }
+    };
+
     before(async () => {
 
         // Create the app instance
@@ -33,9 +41,7 @@ describe('BatchQueueWorker', () => {
 
     describe('constructor', () => {
 
-        after(async () => {
-            await app.services.queue.broker.purge();
-        });
+        after(purge);
 
         it('throws with no options', async () => {
             (() => { new BatchQueueWorker(app); }).should.throw(/options/);
@@ -86,9 +92,7 @@ describe('BatchQueueWorker', () => {
 
     describe('handleMessageBatch', () => {
 
-        afterEach(async () => {
-            await app.services.queue.broker.purge();
-        });
+        afterEach(purge);
 
         it('should handle a batch of messages', async function () {
             this.timeout(5000);
