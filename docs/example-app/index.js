@@ -21,13 +21,13 @@ if (Cluster.isMaster) {
     const myQueueBroker = new OkanjoBroker(app, 'my_queue_worker');
 
     // Start the main application
-    app.connectToServices(() => {
+    app.connectToServices().then(() => {
 
         // Everything connected, now we can send out some messages to our workers
 
         // You can use service.queues.key as an enumeration when working with queues
-        const batchQueueName = app.services.queue.queues.batch;
-        const regularQueueName = app.services.queue.queues.events;
+        const batchQueueName = app.config.rabbit.queues.batch;
+        const regularQueueName = app.config.rabbit.queues.events;
 
         // Send out a batch of messages to the batch queue
         Async.eachSeries(

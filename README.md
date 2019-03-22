@@ -10,7 +10,7 @@ This package:
 * Provides message publishing and consumer functionality
 * Provides a worker class for one-at-a-time message consumption
 * Provides a worker class for batch message consumption
-* Bundles a custom [node-amqp](https://github.com/kfitzgerald/node-amqp/tree/nack) dependency, since the main package is neglected.
+* Uses [Rascal](https://github.com/guidesmiths/rascal) for the underlying queue configuration and interface.
 
 ## Installing
 
@@ -21,6 +21,38 @@ npm install okanjo-app-queue
 ```
 
 Note: requires the [`okanjo-app`](https://github.com/okanjo/okanjo-app) module.
+
+## Breaking Changes
+
+### v2.0.0
+
+ * Underlying driver has changed from forked-version of postwait's `amqp` to rascal/amqplib
+ * Queue configuration has changed, see Rascal's configuration scheme
+ * QueueService
+   * constructor no longer takes `queues` param, this is setup in the Rascal config
+   * `queues` property has been removed
+   * `connect` is now an async function (no more callback)
+   * many internal member functions have been removed
+ * QueueWorker
+   * constructor option `queueName` is now `subscriptionName`
+   * constructor requires option `service` (instance of QueueService)
+   * many internal members have been removed
+   * `init` is now an async function (no more callback)
+   * `subscribe` is now an async function (no more callback)
+   * `onReady` has been removed
+   * `onSubscribed` no longer has arguments
+   * `onUnsubscribed` no longer has arguments
+   * `onMessage` signature has changed to `(message, content, ackOrNack)`
+   * `onMessageHandled` has been removed
+   * `handleMessage` signature has changed to `(message, content, ackOrNack)`
+   * `onServiceError` has been removed
+ * BatchQueueWorker
+   * option `batchSize` now translates to a prefetch of (batchSize * 2), so Async.Cargo can optimally deliver the desired batch size to the app.
+   * `handleMessageBatch` has changed signature to (messages, defaultAckOrNack)
+     * Messages are wrapped, and can be individually acknowledged via `messages[i].ackOrNack(...)`. Likewise, `defaultAckOrNAck(...)` will handle the remaining messages in the batch.
+   * `onMessage` signature has changed to `(message, content, ackOrNack)`
+   * `onMessageHandled` has been removed
+   * `prepareForShutdown` override has been removed
 
 ## Example Usage
 
@@ -45,24 +77,24 @@ class MyBatchWorker extends BatchQueueWorker {
     constructor(app) {
         super(app, {
             service: app.services.queue,
-            queueName: app.services.queue.queues.batch,
+            subscriptionName: app.config.rabbit.queues.batch,
             batchSize: 5
         });
     }
 
-    handleMessageBatch(messages, callback) {
+    handleMessageBatch(messages, defaultAckOrNack) {
 
         // FYI: messages will be an array of message objects, not message payloads
 
         // This worker will simply report the values of the messages it is processing
-        const values = messages.map((message) => message.message.my_message);
+        const values = messages.map((message) => message.content.my_message);
         console.log(`MyBatchWorker consumed messages: ${values.join(', ')}`);
 
         // ack all of the processed messages
-        callback([], []);
+        defaultAckOrNack();
 
         // or you could reject/requeue them too:
-        // callback(requeueMessages, rejectMessages)
+        // defaultAckOrNack(err, recovery);
     }
 }
 
@@ -81,20 +113,20 @@ class MyQueueWorker extends QueueWorker {
     constructor(app) {
         super(app, {
             service: app.services.queue,
-            queueName: app.services.queue.queues.events,
+            subscriptionName: app.config.rabbit.queues.events
         });
     }
 
-    handleMessage(message, callback, headers, deliveryInfo, messageObject) {
+    handleMessage(message, content, ackOrNack) {
 
         // This worker will simply report the values of the messages it is processing
-        console.log(`MyQueueWorker consumed message: ${message.my_message}`);
+        console.log(`MyQueueWorker consumed message: ${content.my_message}`);
 
         // Ack the message
-        callback(false, false);
+        ackOrNack();
 
         // or you could reject, requeue it
-        // callback(reject, requeue);
+        // ackOrNack(err, recovery);
     }
 }
 
@@ -102,44 +134,54 @@ module.exports = MyQueueWorker;
 ```
 
 ### `example-app/config.js`
-Typical OkanjoApp configuration file, containing the queue service config
+Typical OkanjoApp configuration file, containing the queue service config. Generates exchanges, queues, bindings, publications and subscriptions based only on the queue names.
 ```js
 "use strict";
 
 // Ordinarily, you would set normally and not use environment variables,
 // but this is for ease of running the example across platforms
-const host = process.env.RABBIT_HOST || '192.168.99.100';
+const hostname = process.env.RABBIT_HOST || 'localhost';
 const port = process.env.RABBIT_PORT || 5672;
-const login = process.env.RABBIT_USER || 'test';
-const password = process.env.RABBIT_PASS || 'test';
-const vhost = process.env.RABBIT_VHOST || 'test';
+const user = process.env.RABBIT_USER || 'guest';
+const password = process.env.RABBIT_PASS || 'guest';
+const vhost = process.env.RABBIT_VHOST || '/';
+
+const queues = {
+    events: "my_events",
+    batch: "my_batches"
+};
+
+const generateConfigFromQueueNames = require('../../QueueService').generateConfigFromQueueNames;
+
 
 module.exports = {
     rabbit: {
-        host,
-        port,
-
-        login,
-        password,
-
-        vhost,
-
-        // What exchanges/queues to setup (they'll be configured to use the same name)
-        queues: {
-            events: "my_events",
-            batch: "my_batches"
+        rascal: {
+            vhosts: {
+                [vhost]: generateConfigFromQueueNames(Object.values(queues), {
+                    connections: [
+                        {
+                            hostname,
+                            user,
+                            password,
+                            port,
+                            options: {
+                                heartbeat: 1
+                            },
+                            socketOptions: {
+                                timeout: 1000
+                            }
+                        }
+                    ]
+                })
+            }
         },
 
-        // Handle connection drop scenarios
-        reconnect: true,
-        reconnectBackoffStrategy: 'linear',
-        reconnectBackoffTime: 1000,
-        reconnectExponentialLimit: 5000 // don't increase over 5s to reconnect
+        // What exchanges/queues to setup (they'll be configured to use the same name)
+        queues,
     }
 };
 ```
-
-The configuration extends the [node-amqp](https://github.com/kfitzgerald/node-amqp/tree/nack#connection-options-and-url) configuration. See there for additional options.
 
 ### `index.js`
 Example application that will connect, enqueue, and consume messages. Cluster is used to consume messages on forked processes, to keep the main process clean.
@@ -166,13 +208,13 @@ if (Cluster.isMaster) {
     const myQueueBroker = new OkanjoBroker(app, 'my_queue_worker');
 
     // Start the main application
-    app.connectToServices(() => {
+    app.connectToServices().then(() => {
 
         // Everything connected, now we can send out some messages to our workers
 
         // You can use service.queues.key as an enumeration when working with queues
-        const batchQueueName = app.services.queue.queues.batch;
-        const regularQueueName = app.services.queue.queues.events;
+        const batchQueueName = app.config.rabbit.queues.batch;
+        const regularQueueName = app.config.rabbit.queues.events;
 
         // Send out a batch of messages to the batch queue
         Async.eachSeries(
@@ -245,28 +287,22 @@ RabbitMQ management class. Must be instantiated to be used.
 ## Properties
 * `service.app` – (read-only) The OkanjoApp instance provided when constructed
 * `service.config` – (read-only) The queue service configuration provided when constructed
-* `service.queues` – (read-only) The queues enumeration provided when constructed
-* `service.reconnect` – Whether to reconnect when the connection terminates
-* `service.rabbit` – (read-only) The underlying node-amqp connection
-* `service.activeExchanges` – Map of active [exchanges](https://github.com/kfitzgerald/node-amqp/tree/nack#exchange), keyed on queue name
-* `service.activeQueues` – Map of active [queues](https://github.com/kfitzgerald/node-amqp/tree/nack#queue)
+* `service.broker` – (read-only) The underlying Rascal broker (promised)
 
 ## Methods
 
-### `new QueueService(app, [config, [queues]])`
+### `new QueueService(app, config)`
 Creates a new queue service instance.
 * `app` – The OkanjoApp instance to bind to
-* `config` – (Optional) The queue service configuration object. Defaults to app.config.rabbit if not provided.
-  * The configuration extends the [node-amqp](https://github.com/kfitzgerald/node-amqp/tree/nack#connection-options-and-url) configuration. See there for additional options.
-  * `config.queues` – Enumeration of queue names. For example: `{ events: "my_event_queue_name" }`
-* `queues` – (Optional) Enumeration of queue names. Overrides config.queues if both are set. Use this separately if you intend on using multiple service instances. For example: `{ events: "my_event_queue_name" }`
+* `config` – The Rascal configuration object. See [Rascal](https://github.com/guidesmiths/rascal)
 
 ### `service.publishMessage(queue, data, [options], [callback])`
-Publishes a message to a queue.
-* `queue` – The name of the exchange/queue to publish to.
+Publishes a message to a Rascal publication.
+* `queue` – The name of the Rascal publication to send to
 * `data` – The object message to publish.
-* `options` – (Optional) Additional [exchange options](https://github.com/kfitzgerald/node-amqp/tree/nack#exchangepublishroutingkey-message-options-callback), if needed.
-* `callback(err)` – (Optional) Function to fire when message has been sent or failed to send. 
+* `options` – (Optional) Additional [publication options](https://github.com/guidesmiths/rascal#publications), if needed.
+* `callback(err)` – (Optional) Function to fire when message has been sent or failed to send.
+* Returns a promise. 
 
 ## Events
 
@@ -279,34 +315,37 @@ Base class for basic queue consumer applications. Must be extended to be useful.
 
 ## Properties
 * `worker.service` – (read-only) The QueueService instance provided when constructed
-* `worker.queueName` – (read-only) The name of the queue the worker consumes
-* `worker.queueSubscriptionOptions` – (read-only) The queue [subscribe options](https://github.com/kfitzgerald/node-amqp/tree/nack#queuesubscribeoptions-listener) to use when subscribing
+* `worker.subscriptionName` – (read-only) The name of the Rascal subscriber the worker consumes
+* `worker.queueSubscriptionOptions` – (read-only) The Rascal subscription [subscribe options](https://github.com/guidesmiths/rascal#subscriptions) to use when subscribing
 * `worker.verbose` – Whether to report various state changes
-
+* `worker.nack` – Basic strategies that can be used for message handling
+  * `worker.nack.drop` – Discards or dead-letters the message
+  * `worker.nack.requeue` – Replaces the message back on top of the queue after a 1 second delay
+  * `worker.nack.republish` – Requeues the message on to the bottom of the queue after a 1 second delay
+  * `worker.nack.default` – Pointer to `worker.nack.republish`.
+  * `worker.nack._redeliveriesExceeded` – Used when a message fails redelivery attempts. Defaults to `worker.nack.default`
+  * `worker.nack._invalidContent` – Used when a message fails to parse. Defaults to `worker.nack.default`
+  
+> Note: You can change `worker.nack._redeliveriesExceeded` and `worker.nack._invalidContent` to suit the needs of your application
+  
 ## Methods
 
 ### `new QueueWorker(app, options)`
 Creates a new instance of the worker. Use `super(app, options)` when extending.
 * `app` – The OkanjoApp instance to bind to
 * `options` – Queue worker configuration options
-  * `options.queueName` – (required) The name of the queue to consume
-  * `options.service` – (required) The QueueService instance to use for communciation
-  * `options.queueSubscriptionOptions` – (optional) The queue [subscribe options](https://github.com/kfitzgerald/node-amqp/tree/nack#queuesubscribeoptions-listener) to use when subscribing
+  * `options.subscriptionName` – (required) The name of the Rascal subscription to consume
+  * `options.service` – (required) The QueueService instance to use for communication
+  * `options.queueSubscriptionOptions` – (optional) The Rascal subscription [subscribe options](https://github.com/guidesmiths/rascal#subscriptions) to use when subscribing
   * `options.verbose` (optional) Whether to log various state changes. Defaults to `true`.
   * `options.skipInit` (optional) Whether to skip initialization/connecting at construction time. Use this for customizations or class extensions if needed. Defaults to `false`. 
 
-### `worker.handleMessage(message, callback, headers, deliveryInfo, messageObject)`
+### `worker.handleMessage(message, content, ackOrNack)`
 Message handler. Override this function to let your application handle messages.
-* `message` – The payload contained by the message 
-* `callback(reject, requeue)` – Function to fire when finished consuming the message.
-  * `reject` – Set to true to reject the message instead of acknowledging.
-  * `requeue` – Set to true to requeue the message if `reject` is true too. Useful if your consumer experienced a temporary error and cannot handle the message at this time, so the message goes back on top of the queue. 
-* `headers` – Headers included in the message
-* `deliveryInfo` – Message delivery information
-* `messageObject` – node-amqp message object.
+* `message` – The Rascal message object
+* `content` – The parsed content of the message
+* `ackOrNack(err, recovery, callback)` – Acknowledge or reject the message. See [recovery strategies](https://github.com/guidesmiths/rascal#message-acknowledgement-and-recovery-strategies). 
 
-At the very least, you just need message can callback, however headers, deliveryInfo and messageObject are available if needed by your application.
-See [node-amqp](https://github.com/kfitzgerald/node-amqp/tree/nack#queuesubscribeoptions-listener) for more information on headers, deliveryInfo and the messageObject parameters.
 
 ## Events
 
@@ -318,37 +357,50 @@ Base class for batch message consumption applications. Must be extended to be us
 
 ## Properties
 * `worker.service` – (read-only) The QueueService instance provided when constructed
-* `worker.queueName` – (read-only) The name of the queue the worker consumes
-* `worker.queueSubscriptionOptions` – (read-only) The queue [subscribe options](https://github.com/kfitzgerald/node-amqp/tree/nack#queuesubscribeoptions-listener) to use when subscribing
+* `worker.subscriptionName` – (read-only) The name of the Rascal subscriber the worker consumes
+* `worker.queueSubscriptionOptions` – (read-only) The Rascal subscription [subscribe options](https://github.com/guidesmiths/rascal#subscriptions) to use when subscribing
 * `worker.verbose` – Whether to report various state changes
-* `worker.batchSize` – (read-only) Up to how many messages to process at one time. 
+* `worker.nack` – Basic strategies that can be used for message handling
+  * `worker.nack.drop` – Discards or dead-letters the message
+  * `worker.nack.requeue` – Replaces the message back on top of the queue after a 1 second delay
+  * `worker.nack.republish` – Requeues the message on to the bottom of the queue after a 1 second delay
+  * `worker.nack.default` – Pointer to `worker.nack.republish`.
+  * `worker.nack._redeliveriesExceeded` – Used when a message fails redelivery attempts. Defaults to `worker.nack.default`
+  * `worker.nack._invalidContent` – Used when a message fails to parse. Defaults to `worker.nack.default`
+* `worker.batchSize` – (read-only) Up to how many messages to process at one time.
+  
+> Note: You can change `worker.nack._redeliveriesExceeded` and `worker.nack._invalidContent` to suit the needs of your application
 
+> Note: Internally, the consumer prefetch count will be exactly twice the given `batchSize`. This is so the application 
+> can try to process the given batchSize at any given time. Async.Cargo is the primary driver for batches, so you may not 
+> always receive a full batch. 
+ 
 ## Methods
 
 ### `new BatchQueueWorker(app, options)`
 Creates a new instance of the worker. Use `super(app, options)` when extending.
 * `app` – The OkanjoApp instance to bind to
 * `options` – Queue worker configuration options
-  * `options.queueName` – (required) The name of the queue to consume
-  * `options.service` – (required) The QueueService instance to use for communciation
-  * `options.batchSize` – (optional) Up to how many messages to consume at a time. Defaults to `5`.
-  * `options.queueSubscriptionOptions` – (optional) The queue [subscribe options](https://github.com/kfitzgerald/node-amqp/tree/nack#queuesubscribeoptions-listener) to use when subscribing
+  * `options.subscriptionName` – (required) The name of the Rascal subscription to consume
+  * `options.service` – (required) The QueueService instance to use for communication
+  * `options.queueSubscriptionOptions` – (optional) The Rascal subscription [subscribe options](https://github.com/guidesmiths/rascal#subscriptions) to use when subscribing
   * `options.verbose` (optional) Whether to log various state changes. Defaults to `true`.
-  * `options.skipInit` (optional) Whether to skip initialization/connecting at construction time. Use this for customizations or class extensions if needed. Defaults to `false`.
+  * `options.skipInit` (optional) Whether to skip initialization/connecting at construction time. Use this for customizations or class extensions if needed. Defaults to `false`. 
+  * `options.batchSize` – (optional) Up to how many messages to consume at a time. Defaults to `5`.
   
-### `worker.handleMessageBatch(messages, callback)`
+### `worker.handleMessageBatch(messages, defaultAckOrNack)`
 Batch message handler. Override this function to let your app handle messages.
-* `messages` – Array of message objects (NOT PAYLOADS). Access the a message payload like so: messages[0].message.
-* `callback(requeueMessages, rejectMessages)` – Function to fire when done processing the batch.
- * `requeueMessages` – Optional array of message objects to requeue. You can requeue a partial amount of messages if necessary.
- * `rejectMessages` – Optional array of message objects to reject and not requeue. You can reject a partial amount of messages if necessary.
+* `messages` – Array of wrapped Rascal messages.
+  * `message[i].message` – Message object 
+  * `message[i].content` – Parsed message content
+  * `message[i].ackOrNack(err, recovery, callback)` – Individual message handler. See [recovery strategies](https://github.com/guidesmiths/rascal#message-acknowledgement-and-recovery-strategies).  
+* `defaultAckOrNack(err, recovery, callback)` – Default message handler to apply to all messages in the batch, that have not been handled individually. See [recovery strategies](https://github.com/guidesmiths/rascal#message-acknowledgement-and-recovery-strategies).
  
 For example:
-* To ack all messages, simply do `callback();`
-* To requeue all messages, do `callback(messages);`
-* To reject all messages, do `callback([], messages);` 
-
-Note: **Do not manipulate `messages`**. For example, do not use array functions such as pop, push, splice, slice, etc. Doing so may result in stability issues.
+* To ack an individual message: `message[i].ackOrNack();`
+* To ack all messages: `defaultAckOrNack();`
+* To requeue all messages: `defaultAckOrNack(true, this.nack.requeue);`
+* To reject all messages, do `defaultAckOrNack(true, this.nack.drop);` 
  
 ## Events
 
@@ -368,13 +420,13 @@ Before you can run the tests, you'll need a working RabbitMQ server. We suggest 
 For example:
 
 ```bash
-docker pull rabbitmq:3.6-management
-docker run -d -p 5672:5672 -p 15672:15672 -e RABBITMQ_DEFAULT_VHOST=test -e RABBITMQ_DEFAULT_USER=test -e RABBITMQ_DEFAULT_PASS=test rabbitmq:3.6-management
+docker pull rabbitmq:3.7-management
+docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3.7-management
 ```
 
 To run unit tests and code coverage:
 ```sh
-RABBIT_HOST=192.168.99.100 RABBIT_PORT=5672 RABBIT_USER=test RABBIT_PASS=test RABBIT_VHOST=test npm run report
+RABBIT_HOST=localhost RABBIT_PORT=5672 RABBIT_USER=guest RABBIT_PASS=guest RABBIT_VHOST="/" npm run report
 ```
 
 Update the `RABBIT_*` environment vars to match your docker host (e.g. host, port, user, pass, vhost, etc)

@@ -36,11 +36,8 @@
   "dependencies": {
     "async": "^2.6.2",
     "okanjo-app-broker": "^1.0.0",
-    "amqp": "kfitzgerald/node-amqp#nack"
+    "rascal": "^4.2.3"
   },
-  "bundledDependencies": [
-    "amqp"
-  ],
   "nyc": {
     "reporter": [
       "text-summary",

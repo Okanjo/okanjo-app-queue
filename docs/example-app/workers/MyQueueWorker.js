@@ -1,6 +1,5 @@
 "use strict";
 
-
 // const QueueWorker = require('okanjo-app-queue/QueueWorker');
 const QueueWorker = require('../../../QueueWorker');
 
@@ -9,20 +8,20 @@ class MyQueueWorker extends QueueWorker {
     constructor(app) {
         super(app, {
             service: app.services.queue,
-            queueName: app.services.queue.queues.events,
+            subscriptionName: app.config.rabbit.queues.events
         });
     }
 
-    handleMessage(message, callback, headers, deliveryInfo, messageObject) {
+    handleMessage(message, content, ackOrNack) {
 
         // This worker will simply report the values of the messages it is processing
-        console.log(`MyQueueWorker consumed message: ${message.my_message}`);
+        console.log(`MyQueueWorker consumed message: ${content.my_message}`);
 
         // Ack the message
-        callback(false, false);
+        ackOrNack();
 
         // or you could reject, requeue it
-        // callback(reject, requeue);
+        // ackOrNack(err, recovery);
     }
 }
 

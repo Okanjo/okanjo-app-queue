@@ -1,7 +1,6 @@
 "use strict";
 
-const AMQP = require('amqp');
-const Async = require('async');
+const Rascal = require('rascal');
 
 /**
  * Okanjo Message Queue Service
@@ -13,64 +12,45 @@ class QueueService {
      * Queue management service
      * @param {OkanjoApp} app
      * @param {*} [config] service config
-     * @param {*} [queues] - Queue enumeration
      * @constructor
      */
-    constructor(app, config, queues) {
+    constructor(app, config) {
 
         this.app = app;
-        this.config = config || app.config.rabbit;
+        this.config = config;
 
-        if (!this.config) {
-            throw new Error('okanjo-app-queue: No configuration set for QueueService!');
+        if (!this.config || !this.config.rascal) {
+            throw new Error('okanjo-app-queue: No rascal configuration set for QueueService!');
         }
 
-        this.queues = queues || this.config.queues || {};
-        this.reconnect = true;
-
-        this.rabbit = null;
-        this.activeExchanges = {};
-        this.activeQueues = {};
+        this.broker = null; // set on connect
 
         // Register the connection with the app
-        app._serviceConnectors.push((cb) => {
-
-            this.connect(() => {
-                /* istanbul ignore else: too hard to edge case this with unit tests and docker */
-                if (cb) {
-                    cb();
-                }
-                cb = null; // don't do this twice
-            });
-
+        app._serviceConnectors.push(async () => {
+            await this.connect();
         });
     }
 
     /**
      * Connects to RabbitMQ and binds the necessary exchanges and queues
-     * @param callback - Fired when connected and ready to publish messages
      */
-    connect(callback) {
-
-        // Create the rabbit connection
-        this.rabbit = AMQP.createConnection(this.config);
-
-        // Internally, amqp uses it's own error listener, so the default of 10 is not sufficient
-        this.rabbit.setMaxListeners(50);
-
-        // Bind events
-        this.rabbit
-            .on('error', this._handleConnectionError.bind(this))
-            .on('end', this._handleConnectionEnd.bind(this))
-            .on('ready', this._handleConnectionReady.bind(this, callback));
+    async connect() {
+        try {
+            this.broker = await Rascal.BrokerAsPromised.create(Rascal.withDefaultConfig(this.config.rascal));
+            this.broker.on('error', this._handleBrokerError.bind(this));
+        } catch(err) {
+            this.app.report('okanjo-app-queue: Failed to create Rascal broker:', err);
+            throw err;
+        }
     }
 
     /**
      * Publishes a message to the given queue
-     * @param queue - The queue name to publish to
-     * @param data - The message data to queue
+     * @param {string} queue - The queue name to publish to
+     * @param {*} data - The message data to queue
      * @param [options] - The message data to queue
      * @param [callback] - Fired when done
+     * @returns {Promise}
      */
     publishMessage(queue, data, options, callback) {
 
@@ -80,110 +60,25 @@ class QueueService {
             options = {};
         }
 
-        // If options was given but has no value, default it to an empty object
-        // options = options || {};
+        return new Promise(async (resolve, reject) => {
+            let pub;
+            try {
+                pub = await this.broker.publish(queue, data, options);
+            } catch (err) {
+                this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options });
 
-        this.activeExchanges[queue].publish('', data, options, (hasError, err) => {
-            /* istanbul ignore if: edge case testing with rabbit isn't necessary yet */
-            if (hasError) {
-                this.app.report('Failed to publish queue message', err, data, queue);
+                if (callback) return callback(err);
+                return reject(err);
             }
 
-            /* istanbul ignore else: i'm confident that this is solid, unit tests need the ack so good enough for now */
-            if (callback) {
-                // Use next tick to clear i/o on the event loop if someone's planning on batch queuing
-                setImmediate(() => callback(err));
-            }
+            if (callback) return callback(null, pub);
+            return resolve(pub);
         });
+
     }
 
-    /* istanbul ignore next: would require edge casing docker connection states */
-    /**
-     * Handles a connection error event from RabbitMQ
-     * @param err - Error received
-     * @private
-     */
-    _handleConnectionError(err) {
-        if (err !== 'RECONNECT PLZ') {
-            this.app.report('RabbitMQ connection error!', err);
-        }
-    }
-
-    /* istanbul ignore next: would require edge casing docker connection states */
-    /**
-     * Handles a connection closed event from RabbitMQ
-     * @private
-     */
-    _handleConnectionEnd() {
-        if (this.reconnect) {
-            // Manually trigger an error to use the built in reconnection functionality
-            process.nextTick(this.rabbit.emit.bind(this.rabbit, 'error', 'RECONNECT PLZ'));
-        }
-    }
-
-    /**
-     * Handles a connection ready event from RabbitMQ
-     * @param callback - Fired when done
-     * @private
-     */
-    _handleConnectionReady(callback) {
-
-        // Bind the exchanges and queues!
-        Async.each(
-            Object.keys(this.queues),
-            (key, next) => {
-                this._bindQueueExchange(this.queues[key], next);
-            },
-            (err) => {
-                process.nextTick(callback.bind(null, err));
-                callback = null; // Don't fire again on reconnects
-            }
-        );
-    }
-
-    /**
-     * Binds an exchange and a queue with the given name
-     * @param name - The name to use
-     * @param callback - Fired when done
-     * @private
-     */
-    _bindQueueExchange(name, callback) {
-        // Note: exchange and queue share the same name
-        // Connect to the exchange
-        this.rabbit.exchange(name, {
-            type: 'direct',
-            durable: true,
-            autoDelete: false,
-            confirm: true
-        }, (exchange) => {
-
-            // Save this for later because we'll need it to send of messages to report
-            this.activeExchanges[name] = exchange;
-
-            // Connect to the queue
-            this.rabbit.queue(name,  {
-                exclusive: false,
-                durable: true,
-                autoDelete: false
-            }, (queue) => {
-
-                // Save the queue so we can gracefully unsubscribe later
-                this.activeQueues[name] = queue;
-
-                // Bind and subscribe to the queue
-                queue.bind(name, '');
-
-                //console.error(' >> Message queue connected:', name);
-
-                /* istanbul ignore else: would require edge casing docker connection states */
-                // Queue bound and ready to rock and roll
-                if (callback) {
-                    process.nextTick(callback.bind());
-                    callback = null;
-                }
-
-            }); // </queue>
-        }); // </exchange>
+    _handleBrokerError(err) {
+        this.app.report('okanjo-app-queue: Rascal Broker error', err);
     }
 }
 
@@ -198,5 +93,35 @@ QueueService.QueueWorker = require('./QueueWorker');
  * @type {BatchQueueWorker}
  */
 QueueService.BatchQueueWorker = require('./BatchQueueWorker');
+
+/**
+ * Helper to generate a vhost config for Rascal based on old queue-name only setup
+ * @param queueNames – Array of string queue names
+ * @param [config] – Optional vhost config to append to
+ * @returns {*|{exchanges: Array, queues: {}, bindings: {}, subscriptions: {}, publications: {}}}
+ */
+QueueService.generateConfigFromQueueNames = (queueNames, config) => {
+    config = config || {};
+    config.exchanges = config.exchanges || [];
+    config.queues = config.queues || {};
+    config.bindings = config.bindings || {};
+    config.subscriptions = config.subscriptions || {};
+    config.publications = config.publications || {};
+
+    queueNames.forEach((name) => {
+        config.exchanges.push(name);
+        config.queues[name] = {};
+        config.bindings[name] = {
+            source: name,
+            destination: name,
+            destinationType: "queue",
+            bindingKey: "" // typically defaults to #, does this matter?
+        };
+        config.subscriptions[name] = { queue: name };
+        config.publications[name] = { exchange: name };
+    });
+
+    return config;
+};
 
 module.exports = QueueService;

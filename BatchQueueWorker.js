@@ -10,31 +10,38 @@ class BatchQueueWorker extends QueueWorker {
 
     constructor(app, options) {
 
-        const batchSize = options.batchSize || 5;
+        if (!options) {
+            throw new Error('BatchQueueWorker: options are required');
+        }
 
-        // Set our base queue worker options based on our batch size
-        options.queueSubscriptionOptions = { ack: true, prefetchCount: batchSize };
+        const batchSize = options.batchSize || 5;
+        const skipInit = options.skipInit || false;
+
+        // Set the base QueueWorker options based on the given batch size
+        options.queueSubscriptionOptions = options.queueSubscriptionOptions || {};
+        options.queueSubscriptionOptions.prefetch = batchSize * 2;
+        options.queueSubscriptionOptions.retry = options.queueSubscriptionOptions.retry || { delay: 1000 };
 
         // Don't initialize until we're all setup
         options.skipInit = true;
 
-        // Start the engines
+        // Initialize underlying QueueWorker
         super(app, options);
 
         /**
          * Message batch size - How many messages we'll be sent at a time
          * @type {number}
          */
-        this.batchSize = options.batchSize || 5;
-        this._isProcessing = null; // Not applicable to this worker
+        this.batchSize = batchSize;
 
         // Get the aggregator setup
         this._setupCargo();
 
         // Start accepting messages
-        this.init();
+        if (!skipInit) {
+            this.init();
+        }
     }
-
 
     /* istanbul ignore next: must be implemented or this does nothing */
     //noinspection JSMethodCanBeStatic
@@ -42,17 +49,20 @@ class BatchQueueWorker extends QueueWorker {
      * This is the batch handler you need to override!
      *
      * @param {[*]} messages – Array of message objects, NOT payloads, that would be messages[0].message
-     * @param {function(requeueMessages:[], rejectMessages:[])} callback - Fire when done processing the batch
+     * @param {function(err:*=null, recovery:*=null)} defaultAckOrNack - Fire when done processing the batch
      */
-    handleMessageBatch(messages, callback) {
+    handleMessageBatch(messages, defaultAckOrNack) {
 
         // YOU MUST IMPLEMENT THIS TO BE USEFUL
 
-        // DO NOT MANIPULATE `messages` !! IF YOU DO, YOU'll PROBABLY BREAK IT HARD
-        // e.g. DO NOT messages.pop/push/slice/splice, etc. THIS IS BAD.
+        // individually ack or nack a message in the batch
+        // messages[i].ackOrNack();             // individually ack or nack a message in the batch
 
-        // callback(requeueMessages, rejectMessages)
-        callback(messages, []);
+        // ack or nack the unhandled messages in the batch
+        // defaultAckOrNack();                  // ack all
+        // defaultAckOrNack(err);               // err all w/ default strategy
+        // defaultAckOrNack(err, recovery);     // err all w/ specific strategy
+        defaultAckOrNack(true, this.nack.drop); // err all w/ drop strategy
     }
 
     /**
@@ -60,131 +70,64 @@ class BatchQueueWorker extends QueueWorker {
      * @private
      */
     _setupCargo() {
-        this._cargo = Async.cargo(this._processCargoBatch.bind(this));
+        this._cargo = Async.cargo(this._processCargoBatch.bind(this), this.batchSize);
     }
 
     /**
      * Internal handler for shipping a batch of messages to the application
-     * @param messages
+     * @param {[CargoMessage]} messages
      * @param callback
      * @private
      */
     _processCargoBatch(messages, callback) {
 
-        // Hold onto the last message in case we get to accept the entire batch
-        const lastMessage = messages[messages.length-1];
-
         // Pass the batch to the handler
-        this.handleMessageBatch(messages, (requeue, reject) => {
+        this.handleMessageBatch(messages, (err, recovery) => {
 
-            // Normalize responses if they're empty
-            requeue = Array.isArray(requeue) ? requeue : [];
-            reject = Array.isArray(reject) ? reject : [];
-
-            // If there's anything to throw away
-            if (requeue.length + reject.length > 0) {
-
-                // Iterate each and accept, or reject/requeue
-                messages.forEach((message) => {
-                    if (requeue.includes(message)) {
-                        message.messageObject.reject(true);
-                    } else if (reject.includes(message)) {
-                        message.messageObject.reject(false);
-                    } else {
-                        message.messageObject.acknowledge(false);
-                    }
-                });
-
-            } else {
-                // Ack the entire batch
-                lastMessage.messageObject.acknowledge(true);
-            }
+            // Ack/Nack any unhandled message
+            messages.forEach((message) => {
+                if (!message._handled) {
+                    message.ackOrNack(err, recovery);
+                }
+            });
 
             callback();
         });
     }
 
     /**
-     * Override the default message handler system
+     * Override the default message handler system. Routes messages into async cargo.
      *
-     * @see https://github.com/postwait/node-amqp#queuesubscribeoptions-listener
-     *
-     * @param message - Message body
-     * @param [headers] - Message headers
-     * @param [deliveryInfo] - Raw message info
-     * @param [messageObject] - Message object wrapper (e.g. messageObject.acknowedge(false) )
+     * @param message - Message object
+     * @param content – Message body
+     * @param ackOrNack – Callback to ack or nack the message
      */
-    onMessage(message, headers, deliveryInfo, messageObject) {
-        /* istanbul ignore else: I really tried to unit test this but i don't think i can (timing) */
-        if (!this._isShuttingDown) {
+    onMessage(message, content, ackOrNack) {
 
-            // Queue this into the current batch
-            this._cargo.push({
-                message,
-                headers,
-                deliveryInfo,
-                messageObject
-            });
-
-        } else {
-            // If we're in the process of shutting down, reject+requeue this message so it's handled later
-            setImmediate(() => messageObject.reject(true));
-        }
-    }
-
-    /* istanbul ignore next: not implemented in this class */
-    /**
-     * Callback provided to the message handler to complete working with the message
-     * @param reject
-     * @param requeue
-     */
-    onMessageHandled(reject, requeue) { /* eslint-disable-line no-unused-vars */
-        throw new Error('This method does not apply to this worker. Do not use it.');
-    }
-
-    /* istanbul ignore next: not implemented in this class */
-    /**
-     * Hook point for handling messages
-     *
-     * @see https://github.com/postwait/node-amqp#queuesubscribeoptions-listener
-     *
-     * @param message - Message body
-     * @param {function(reject:boolean, requeue:boolean)} callback - Fire when done processing the message
-     * @param [headers] - Message headers
-     * @param [deliveryInfo] - Raw message info
-     * @param [messageObject] - Message object wrapper (e.g. messageObject.acknowedge(false) )
-     */
-    handleMessage(message, callback, headers, deliveryInfo, messageObject) { /* eslint-disable-line no-unused-vars */
-        throw new Error('This method does not apply to this worker. Do not use it.');
-    }
-
-    //noinspection JSUnusedGlobalSymbols,JSUnusedLocalSymbols
-    /**
-     * Starts the internal shutdown process (hook point)
-     */
-    prepareForShutdown(canAsync) { /* eslint-disable-line no-unused-vars */
-
-        this.log(` !! Shutting down the ${this.queueName} queue`);
-
-        // Flag that we're shutting down
-        this._isShuttingDown = true;
-
-        // Unsub and shutdown
-        const done = () => {
-            this.unsubscribe(() => {
-                this.shutdown();
-            });
+        /**
+         * Wrapped Cargo Message
+         * @typedef {{message: *, content: *, ackOrNack: function(err:*,recovery:*), _handled: boolean}} CargoMessage
+         */
+        const payload = {
+            message,
+            content,
+            // wrapper around given ackOrNack, if message individually handled, flag it
+            ackOrNack: (...params) => {
+                payload._handled = true;
+                ackOrNack.apply(null, params);
+            },
+            _handled: false
         };
 
-        // If the cargo is still working, then drain it and end, otherwise just end
-        /* istanbul ignore next: it's really hard to test this case of cargo still got junk in it at shutdown */
-        if (this._cargo.length() > 0) {
-            this._cargo.drain = () => {
-                done();
-            };
-        } else {
-            done();
-        }
+        // Queue this into the current batch
+        this._cargo.push(payload);
+    }
+
+    /**
+     * Do not use this method on this QueueWorker
+     */
+    handleMessage(message, content, ackOrNack) { /* eslint-disable-line no-unused-vars */
+        throw new Error('BatchQueueWorker: This method does not apply to this worker. Do not use it.');
     }
 }
 
