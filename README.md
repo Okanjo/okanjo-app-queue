@@ -304,6 +304,117 @@ Publishes a message to a Rascal publication.
 * `callback(err)` – (Optional) Function to fire when message has been sent or failed to send.
 * Returns a promise. 
 
+
+## Static Methods
+
+### `QueueService.generateConfigFromQueueNames(queueNames, [config, [options]])`
+Generates a QueueService config based on an array of queue names.
+* `queueNames` – Array of string queue names
+* `config` - Optional base configuration. Will be generated not given.
+  * `config.exchanges` – Exchanges container object
+  * `config.queues` – Queues container object
+  * `config.bindings` – Bindings container object
+  * `config.subscriptions` – Subscriptions container object
+  * `config.publications` – Publications container object
+* `options` – Additional options when configuring exchanges, queues, and bindings
+  * `options.exchangeDefaults` - Options to set on the Rascal exchange configuration
+  * `options.queueDefaults` – Options to set on the Rascal queue configuration
+  * `options.bindingDefaults` – Options to set on the Rascal bindings configuration 
+Returns a usable configuration object for QueueService/Rascal
+
+For example:
+
+```js
+const queueNames = ['queue1','queue2','queue3'];
+const baseConfig = {
+    connections: [ 
+        {
+            hostname: '127.0.0.1',
+            port: 1234,
+            user: 'username',
+            password: 'password',
+            options: { heartbeat: 1 },
+            socketOptions: { timeout: 10000 },
+            management: { url: 'http://username:password@127.0.0.1:1234' }
+        }
+    ]
+};
+const configOptions = {
+    exchangeDefaults: {
+        assert: true,
+        type: 'direct'
+    }
+};
+const config = {
+    rascal: {
+        vhosts: {
+            my_vhost: QueueService.generateConfigFromQueueNames(queueNames, baseConfig, configOptions)
+        }
+    }
+};
+```
+
+Is the same as:
+
+```js
+config = {
+    rascal: {
+        vhosts: {
+            my_vhost: {
+                connections: [
+                    {
+                        hostname: '127.0.0.1',
+                        port: 1234,
+                        user: 'username',
+                        password: 'password',
+                        options: { heartbeat: 1 },
+                        socketOptions: { timeout: 10000 },
+                        management: { url: 'http://username:password@127.0.0.1:1234' }
+                    }
+                ],
+                exchanges: {
+                    queue1: {assert: true, type: 'direct'},
+                    queue2: {assert: true, type: 'direct'},
+                    queue3: {assert: true, type: 'direct'}
+                },
+                queues: {queue1: {}, queue2: {}, queue3: {}},
+                bindings: {
+                    queue1: {
+                        bindingKey: '',
+                        destinationType: 'queue',
+                        source: 'queue1',
+                        destination: 'queue1'
+                    },
+                    queue2: {
+                        bindingKey: '',
+                        destinationType: 'queue',
+                        source: 'queue2',
+                        destination: 'queue2'
+                    },
+                    queue3: {
+                        bindingKey: '',
+                        destinationType: 'queue',
+                        source: 'queue3',
+                        destination: 'queue3'
+                    }
+                },
+                subscriptions: {
+                    queue1: {queue: 'queue1'},
+                    queue2: {queue: 'queue2'},
+                    queue3: {queue: 'queue3'}
+                },
+                publications: {
+                    queue1: {exchange: 'queue1'},
+                    queue2: {exchange: 'queue2'},
+                    queue3: {exchange: 'queue3'}
+                }
+            }
+        }
+    }
+};
+```
+
+
 ## Events
 
 This class does not emit events.

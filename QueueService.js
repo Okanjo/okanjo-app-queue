@@ -98,24 +98,30 @@ QueueService.BatchQueueWorker = require('./BatchQueueWorker');
  * Helper to generate a vhost config for Rascal based on old queue-name only setup
  * @param queueNames – Array of string queue names
  * @param [config] – Optional vhost config to append to
+ * @param {{exchangeDefaults:*, queueDefaults:*, bindingDefaults:*}} [options] – Additional options for exchanges, queues, and bindings
  * @returns {*|{exchanges: Array, queues: {}, bindings: {}, subscriptions: {}, publications: {}}}
  */
-QueueService.generateConfigFromQueueNames = (queueNames, config) => {
+QueueService.generateConfigFromQueueNames = (queueNames, config, options={}) => {
     config = config || {};
-    config.exchanges = config.exchanges || [];
+    config.exchanges = config.exchanges || {};
     config.queues = config.queues || {};
     config.bindings = config.bindings || {};
     config.subscriptions = config.subscriptions || {};
     config.publications = config.publications || {};
 
     queueNames.forEach((name) => {
-        config.exchanges.push(name);
-        config.queues[name] = {};
+        config.exchanges[name] = {
+            ...options.exchangeDefaults
+        };
+        config.queues[name] = {
+            ...options.queueDefaults
+        };
         config.bindings[name] = {
+            bindingKey: "", // typically defaults to #, does this matter?
+            destinationType: "queue",
+            ...options.bindingDefaults,
             source: name,
             destination: name,
-            destinationType: "queue",
-            bindingKey: "" // typically defaults to #, does this matter?
         };
         config.subscriptions[name] = { queue: name };
         config.publications[name] = { exchange: name };

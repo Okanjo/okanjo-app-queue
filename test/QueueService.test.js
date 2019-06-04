@@ -135,7 +135,7 @@ describe('QueueService', () => {
             const config = QueueService.generateConfigFromQueueNames(queues);
 
             config.should.deepEqual({
-                exchanges: ['apples', 'bananas', 'cherries'],
+                exchanges: {apples: {}, bananas: {}, cherries: {}},
                 queues: {apples: {}, bananas: {}, cherries: {}},
                 bindings: {
                     apples: {
@@ -206,7 +206,7 @@ describe('QueueService', () => {
                         }
                     }
                 ],
-                exchanges: ['apples', 'bananas', 'cherries'],
+                exchanges: {apples: {}, bananas: {}, cherries: {}},
                 queues: {apples: {}, bananas: {}, cherries: {}},
                 bindings: {
                     apples: {
@@ -237,6 +237,112 @@ describe('QueueService', () => {
                     apples: {exchange: 'apples'},
                     bananas: {exchange: 'bananas'},
                     cherries: {exchange: 'cherries'}
+                }
+            });
+
+        });
+
+        it('can generate with all the options', () => {
+
+            const queueNames = ['queue1','queue2','queue3'];
+            const baseConfig = {
+                connections: [
+                    {
+                        hostname: '127.0.0.1',
+                        port: 1234,
+                        user: 'username',
+                        password: 'password',
+                        options: {
+                            heartbeat: 1
+                        },
+                        socketOptions: {
+                            timeout: 10000
+                        },
+                        management: {
+                            url: 'http://username:password@127.0.0.1:1234'
+                        }
+                    }
+                ]
+            };
+            const configOptions = {
+                exchangeDefaults: {
+                    assert: true,
+                    type: 'direct'
+                },
+                queueDefaults: {
+                    durable: true
+                },
+                bindingDefaults: {
+                    bananas: 1
+                }
+            };
+            const config = {
+                rascal: {
+                    vhosts: {
+                        my_vhost: QueueService.generateConfigFromQueueNames(queueNames, baseConfig, configOptions)
+                    }
+                }
+            };
+            config.should.deepEqual({
+                rascal: {
+                    vhosts: {
+                        my_vhost: {
+                            connections: [
+                                {
+                                    hostname: '127.0.0.1',
+                                    port: 1234,
+                                    user: 'username',
+                                    password: 'password',
+                                    options: { heartbeat: 1 },
+                                    socketOptions: { timeout: 10000 },
+                                    management: { url: 'http://username:password@127.0.0.1:1234' }
+                                }
+                            ],
+                            exchanges: {
+                                queue1: { assert: true, type: 'direct' },
+                                queue2: { assert: true, type: 'direct' },
+                                queue3: { assert: true, type: 'direct' }
+                            },
+                            queues: {
+                                queue1: { durable: true },
+                                queue2: { durable: true },
+                                queue3: { durable: true }
+                            },
+                            bindings: {
+                                queue1: {
+                                    bindingKey: '',
+                                    destinationType: 'queue',
+                                    bananas: 1,
+                                    source: 'queue1',
+                                    destination: 'queue1'
+                                },
+                                queue2: {
+                                    bindingKey: '',
+                                    destinationType: 'queue',
+                                    bananas: 1,
+                                    source: 'queue2',
+                                    destination: 'queue2'
+                                },
+                                queue3: {
+                                    bindingKey: '',
+                                    destinationType: 'queue',
+                                    bananas: 1,
+                                    source: 'queue3',
+                                    destination: 'queue3'
+                                }
+                            },
+                            subscriptions: {
+                                queue1: { queue: 'queue1' },
+                                queue2: { queue: 'queue2' },
+                                queue3: { queue: 'queue3' }
+                            },
+                            publications: {
+                                queue1: { exchange: 'queue1' },
+                                queue2: { exchange: 'queue2' },
+                                queue3: { exchange: 'queue3' }
+                            }
+                        }
+                    }
                 }
             });
 
