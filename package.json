@@ -28,10 +28,12 @@
     "mocha": "^6.0.2",
     "nyc": "^13.3.0",
     "okanjo-app": "^2.0.0",
-    "should": "^13.2.3"
+    "should": "^13.2.3",
+    "amqplib": "^0.5.3"
   },
   "peerDependencies": {
-    "okanjo-app": ">=2"
+    "okanjo-app": ">=2",
+    "amqplib": "^0.5.3"
   },
   "dependencies": {
     "async": "^2.6.2",
