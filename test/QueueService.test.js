@@ -1,5 +1,6 @@
 "use strict";
 
+const log = require('why-is-node-running'); // should be your first require
 const should = require('should');
 const TestUtil = require('./TestUtil');
 
@@ -25,6 +26,13 @@ describe('QueueService', () => {
         };
 
         await app.connectToServices();
+    });
+
+    after((done) => {
+        app.services.queue.broker.shutdown(() => {
+            log(); // logs out active handles that are keeping node running
+            done();
+        });
     });
 
     it('should be bound to app', function () {

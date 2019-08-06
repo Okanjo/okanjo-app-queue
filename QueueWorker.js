@@ -250,19 +250,22 @@ class QueueWorker extends OkanjoWorker {
     /**
      * Starts the internal shutdown process (hook point)
      */
-    prepareForShutdown(canAsync) { /* eslint-disable-line no-unused-vars */
+    async prepareForShutdown(canAsync) { /* eslint-disable-line no-unused-vars */
 
         this.log(` !! Shutting down the ${this.subscriptionName} queue`);
-        (async () => {
-            // If there's a message in the works, wait for it to end
-            try {
-                await this.service.broker.shutdown();
-            } catch (err) /* istanbul ignore next: faking this is unreliable */ {
-                await this.app.report('QueueWorker: Failed to shutdown broker', err, {
-                    subscription: this.subscriptionName
-                });
-            }
-        })();
+        this.unbindProcessSignals();
+
+        // If there's a message in the works, wait for it to end
+        try {
+            await this.service.broker.shutdown();
+        } catch (err) /* istanbul ignore next: faking this is unreliable */ {
+            await this.app.report('QueueWorker: Failed to shutdown broker', err, {
+                subscription: this.subscriptionName
+            });
+        }
+
+        /* istanbul ignore next: die now */
+        this.shutdown();
     }
 }
 
