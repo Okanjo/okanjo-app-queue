@@ -2,6 +2,7 @@
 
 const log = require('why-is-node-running'); // should be your first require
 const should = require('should');
+const { describe, it, before, after, afterEach } = require('mocha');
 
 describe('BatchQueueWorker', () => {
 
@@ -120,7 +121,7 @@ describe('BatchQueueWorker', () => {
             let counter = 0;
             let batch = 0;
 
-            await new Promise(async (resolve) => {
+            await new Promise((resolve) => {
                 worker.handleMessageBatch = function(messages, defaultAckOrNack) {
                     batch++;
                     counter += messages.length;
@@ -139,7 +140,7 @@ describe('BatchQueueWorker', () => {
 
                 }.bind(worker);
 
-                await worker.init();
+                worker.init();
             });
 
             batch.should.be.greaterThanOrEqual(2);
@@ -171,7 +172,7 @@ describe('BatchQueueWorker', () => {
             let counter = 0;
             let batch = 0;
 
-            await new Promise(async (resolve) => {
+            await new Promise((resolve) => {
                 worker.handleMessageBatch = function(messages, defaultAckOrNack) {
                     batch++;
                     counter += messages.length;
@@ -199,7 +200,7 @@ describe('BatchQueueWorker', () => {
 
                 }.bind(worker);
 
-                await worker.init();
+                worker.init();
             });
 
             batch.should.be.greaterThanOrEqual(2);
@@ -225,7 +226,7 @@ describe('BatchQueueWorker', () => {
             let counter = 0;
             let batch = 0;
 
-            await new Promise(async (resolve) => {
+            await new Promise( (resolve) => {
 
                 class MyBatchWorker extends BatchQueueWorker {
                     constructor(app) {
@@ -263,7 +264,7 @@ describe('BatchQueueWorker', () => {
 
             batch.should.be.greaterThanOrEqual(2);
 
-            await new Promise((resolve) => {
+            new Promise((resolve) => {
                 setTimeout(async () => {
                     await worker.unsubscribe();
                     resolve();

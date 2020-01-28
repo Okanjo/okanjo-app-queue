@@ -1,10 +1,14 @@
 {
+
+    "extends": [
+        "eslint:recommended"
+    ],
     "env": {
         "node": true,
         "es6": true
     },
     "parserOptions": {
-        "ecmaVersion": 8,
+        "ecmaVersion": 2018,
         "sourceType": "module",
         "ecmaFeatures": {
             "experimentalObjectRestSpread": true
@@ -12,18 +16,6 @@
     },
     "plugins": [
     ],
-    "extends": "eslint:recommended",
-    "globals": {
-        "require": true,
-        "module": true,
-        "describe": true,
-        "it": true,
-        "before": true,
-        "beforeEach": true,
-        "after": true,
-        "afterEach": true,
-        "Promise": true
-    },
     "overrides": [
         {
             "files": ["docs/**"],

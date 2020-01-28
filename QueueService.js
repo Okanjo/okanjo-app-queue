@@ -60,21 +60,22 @@ class QueueService {
             options = {};
         }
 
-        return new Promise(async (resolve, reject) => {
-            let pub;
-            try {
-                pub = await this.broker.publish(queue, data, options);
-            } catch (err) {
-                this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options });
+        return new Promise((resolve, reject) => {
 
-                if (callback) return callback(err);
-                return reject(err);
-            }
+            this.broker
+                .publish(queue, data, options)
+                .catch(err => {
+                    this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options });
 
-            if (callback) return callback(null, pub);
-            return resolve(pub);
+                    if (callback) return callback(err);
+                    return reject(err);
+                })
+                .then(pub => {
+                    if (callback) return callback(null, pub);
+                    return resolve(pub);
+                })
+            ;
         });
-
     }
 
     _handleBrokerError(err) {

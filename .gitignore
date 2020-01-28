@@ -3,4 +3,3 @@ node_modules
 .idea
 *.tgz
 .nyc_output
-package-lock.json

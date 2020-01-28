@@ -3,6 +3,7 @@
 const log = require('why-is-node-running'); // should be your first require
 const should = require('should');
 const TestUtil = require('./TestUtil');
+const { describe, it, before, after, afterEach } = require('mocha');
 
 describe('QueueService', () => {
 

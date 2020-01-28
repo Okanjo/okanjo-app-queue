@@ -2,6 +2,7 @@
 
 const log = require('why-is-node-running'); // should be your first require
 const should = require('should');
+const { describe, it, before, after, afterEach } = require('mocha');
 
 // process.env.DEBUG='rascal:Subscription,rascal:SubscriberError,rascal:SubscriberSession';
 
@@ -217,18 +218,18 @@ describe('QueueWorker', () => {
             worker.nack._redeliveriesExceeded = worker.nack.drop;
 
             // Wait a sec for the connection to go through
-            await new Promise(async (resolve) => {
+            await new Promise((resolve) => {
                 worker.onSubscribed = function() {
                     resolve();
                 };
-                await worker.subscribe();
+                worker.subscribe();
             });
 
             let counter = 0;
             const max = app.config.rabbit.rascal.vhosts['/'].subscriptions["unittests"].redeliveries.limit+1;
 
             // Wait for the message to hit 11 times (1 real + 10 retries)
-            await new Promise(async (resolve) => {
+            await new Promise((resolve) => {
 
                 // Ensure the message is valid and count the retries
                 worker.handleMessage = function(message, content, ackOrNack) {
@@ -285,7 +286,7 @@ describe('QueueWorker', () => {
             });
 
             // Wait for the message to hit 11 times (1 real + 10 retries)
-            await new Promise(async (resolve) => {
+            await new Promise((resolve) => {
 
                 // Ensure the message is valid and count the retries
                 worker.handleMessage = function(/*message, content, ackOrNack*/) {
@@ -293,11 +294,14 @@ describe('QueueWorker', () => {
                 }.bind(worker);
 
                 // Fire the message
-                await app.services.queue.publishMessage("unittests", "{invalid:content}", { options: { contentType: "application/json" }});
+                app.services.queue.publishMessage("unittests", "{invalid:content}", { options: { contentType: "application/json" }})
+                    .then(() => {
+                        setTimeout(() => {
+                            resolve();
+                        }, 50);
+                    })
+                ;
 
-                setTimeout(() => {
-                    resolve();
-                }, 50);
             });
 
             // Disconnect
@@ -338,7 +342,7 @@ describe('QueueWorker', () => {
             let counter = 0;
 
             // Wait for the message to hit 11 times (1 real + 10 retries)
-            await new Promise(async (resolve, reject) => {
+            await new Promise((resolve, reject) => {
 
                 // Ensure the message is valid and count the retries
                 worker.handleMessage = function(message, content, ackOrNack) {
@@ -363,7 +367,7 @@ describe('QueueWorker', () => {
                 }.bind(worker);
 
                 // Fire the message
-                await app.services.queue.publishMessage("unittests", "explode", { options: { expiration: 100 }});
+                app.services.queue.publishMessage("unittests", "explode", { options: { expiration: 100 }});
             });
 
             // Disconnect
