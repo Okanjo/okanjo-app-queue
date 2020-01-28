@@ -85,13 +85,23 @@ class BatchQueueWorker extends QueueWorker {
         this.handleMessageBatch(messages, (err, recovery) => {
 
             // Ack/Nack any unhandled message
-            messages.forEach((message) => {
+            Async.eachSeries(messages, (message, nextMessage) => {
                 if (!message._handled) {
-                    message.ackOrNack(err, recovery);
+                    message.ackOrNack(err, recovery, (err) => nextMessage(err));
+                } else {
+                    nextMessage();
                 }
+            }, (err) => {
+                callback(err);
             });
 
-            callback();
+            // messages.forEach((message) => {
+            //     if (!message._handled) {
+            //         message.ackOrNack(err, recovery);
+            //     }
+            // });
+            //
+            // callback();
         });
     }
 
@@ -106,7 +116,7 @@ class BatchQueueWorker extends QueueWorker {
 
         /**
          * Wrapped Cargo Message
-         * @typedef {{message: *, content: *, ackOrNack: function(err:*,recovery:*), _handled: boolean}} CargoMessage
+         * @typedef {{message: *, content: *, ackOrNack: function(err:*,recovery:*,callback:function), _handled: boolean}} CargoMessage
          */
         const payload = {
             message,

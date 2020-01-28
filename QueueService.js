@@ -60,18 +60,32 @@ class QueueService {
             options = {};
         }
 
+        let replied = false;
+        let reply = (err, res) => {
+            if (!replied) {
+                replied = true;
+
+                if (callback) {
+                    callback(err, res);
+                    return true;
+                }
+            }
+        };
+
         return new Promise((resolve, reject) => {
 
             this.broker
                 .publish(queue, data, options)
                 .catch(err => {
-                    this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options });
-
-                    if (callback) return callback(err);
-                    return reject(err);
+                    this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options })
+                        .then(() => {
+                            if (reply(err)) return;
+                            return reject(err);
+                        })
+                    ;
                 })
                 .then(pub => {
-                    if (callback) return callback(null, pub);
+                    if (reply(null, pub)) return;
                     return resolve(pub);
                 })
             ;

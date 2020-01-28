@@ -1,6 +1,6 @@
 "use strict";
 
-const log = require('why-is-node-running'); // should be your first require
+// const log = require('why-is-node-running'); // should be your first require
 const should = require('should');
 const { describe, it, before, after, afterEach } = require('mocha');
 
@@ -39,7 +39,7 @@ describe('QueueWorker', () => {
 
     after((done) => {
         // app.services.queue.broker.shutdown(() => {
-            log(); // logs out active handles that are keeping node running
+        //     log(); // logs out active handles that are keeping node running
             done();
         // });
     });
