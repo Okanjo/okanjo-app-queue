@@ -1,6 +1,6 @@
 {
   "name": "okanjo-app-queue",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "Service for interfacing with RabbitMQ",
   "main": "QueueService.js",
   "scripts": {
@@ -24,7 +24,7 @@
   "author": "Okanjo Partners Inc",
   "license": "MIT",
   "devDependencies": {
-    "amqplib": "^0.5.5",
+    "amqplib": "^0.8.0",
     "eslint": "^6.8.0",
     "mocha": "^7.0.1",
     "nyc": "^15.0.0",
@@ -34,13 +34,13 @@
     "why-is-node-running": "^2.1.0"
   },
   "peerDependencies": {
+    "amqplib": "^0.8.0",
     "okanjo-app": ">=2",
-    "okanjo-app-broker": ">=2.2",
-    "amqplib": "^0.5.5"
+    "okanjo-app-broker": ">=2.2"
   },
   "dependencies": {
     "async": "^3.1.1",
-    "rascal": "^8.0.0"
+    "rascal": "^13.1.2"
   },
   "nyc": {
     "reporter": [

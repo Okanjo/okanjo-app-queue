@@ -531,8 +531,8 @@ Before you can run the tests, you'll need a working RabbitMQ server. We suggest 
 For example:
 
 ```bash
-docker pull rabbitmq:3.7-management
-docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3.7-management
+docker pull rabbitmq:3.8-management
+docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3.8-management
 ```
 
 To run unit tests and code coverage:
