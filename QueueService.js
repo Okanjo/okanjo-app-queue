@@ -62,6 +62,7 @@ class QueueService {
 
         let replied = false;
         let reply = (err, res) => {
+            /* istanbul ignore else: in some circumstances, it may be possible for a double callback if rabbit does some wacky connection stuff */
             if (!replied) {
                 replied = true;
 
@@ -85,6 +86,9 @@ class QueueService {
                     ;
                 })
                 .then(pub => {
+                    pub.on('error', /* istanbul ignore next: out of scope */ async err => {
+                        await this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options })
+                    });
                     if (reply(null, pub)) return;
                     return resolve(pub);
                 })
