@@ -122,7 +122,7 @@ describe('QueueService', () => {
         });
 
         it('fails to send a message to a bogus queue', () => {
-            return app.services.queue.publishMessage('bogus', {bogus: true}).should.be.rejectedWith(/bogus/);
+            app.services.queue.publishMessage('bogus', {bogus: true}).should.be.rejectedWith(/bogus/);
         });
 
         it('fails to send a message to a bogus queue with a callback', (done) => {

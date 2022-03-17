@@ -1,6 +1,6 @@
 {
   "name": "okanjo-app-queue",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "description": "Service for interfacing with RabbitMQ",
   "main": "QueueService.js",
   "scripts": {

@@ -77,20 +77,19 @@ class QueueService {
 
             this.broker
                 .publish(queue, data, options)
-                .catch(err => {
-                    this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options })
-                        .then(() => {
-                            if (reply(err)) return;
-                            return reject(err);
-                        })
-                    ;
-                })
                 .then(pub => {
                     pub.on('error', /* istanbul ignore next: out of scope */ async err => {
                         await this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options })
                     });
                     if (reply(null, pub)) return;
                     return resolve(pub);
+                }, err => {
+                    return this.app.report('okanjo-app-queue: Failed to publish queue message', err, { queue, data, options })
+                        .then(() => {
+                            if (reply(err)) return;
+                            return reject(err);
+                        })
+                    ;
                 })
             ;
         });
