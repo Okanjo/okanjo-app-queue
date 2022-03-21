@@ -1,6 +1,6 @@
 # Okanjo RabbitMQ Service
 
-[![Build Status](https://travis-ci.org/Okanjo/okanjo-app-queue.svg?branch=master)](https://travis-ci.org/Okanjo/okanjo-app-queue) [![Coverage Status](https://coveralls.io/repos/github/Okanjo/okanjo-app-queue/badge.svg?branch=master)](https://coveralls.io/github/Okanjo/okanjo-app-queue?branch=master)
+[![Node.js CI](https://github.com/Okanjo/okanjo-app-queue/actions/workflows/node.js.yml/badge.svg)](https://github.com/Okanjo/okanjo-app-queue/actions/workflows/node.js.yml) [![Coverage Status](https://coveralls.io/repos/github/Okanjo/okanjo-app-queue/badge.svg?branch=master)](https://coveralls.io/github/Okanjo/okanjo-app-queue?branch=master)
 
 Service for interfacing with RabbitMQ for the Okanjo App ecosystem.
 
