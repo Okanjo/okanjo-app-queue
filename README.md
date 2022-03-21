@@ -24,6 +24,11 @@ Note: requires the [`okanjo-app`](https://github.com/okanjo/okanjo-app) module.
 
 ## Breaking Changes
 
+### v6.0.0
+ * Node 10 no longer supported
+ * Updated to Rascal v4
+ * Updated to OkanjoApp v3
+
 ### v2.0.0
 
  * Underlying driver has changed from forked-version of postwait's `amqp` to rascal/amqplib
@@ -531,8 +536,8 @@ Before you can run the tests, you'll need a working RabbitMQ server. We suggest 
 For example:
 
 ```bash
-docker pull rabbitmq:3.8-management
-docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3.8-management
+docker pull rabbitmq:3.8.27-management
+docker run -d -p 5672:5672 -p 15672:15672 rabbitmq:3.8.27-management
 ```
 
 To run unit tests and code coverage:

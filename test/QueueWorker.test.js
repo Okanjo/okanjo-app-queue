@@ -18,11 +18,13 @@ describe('QueueWorker', () => {
 
     const purge = async () => {
         try {
+            await app.services.queue.broker.unsubscribeAll();
             await app.services.queue.broker.purge();
         } catch (e) {
             // ¯\_(ツ)_/¯
         }
     };
+
 
     before(async () => {
 
@@ -323,7 +325,7 @@ describe('QueueWorker', () => {
         afterEach(purge);
 
         it('should report subscription errors', async function() {
-            this.timeout(5000);
+            this.timeout(10000);
 
             const worker = new QueueWorker(app, {
                 subscriptionName: 'unittests',
@@ -351,15 +353,20 @@ describe('QueueWorker', () => {
                     if (counter === 1) {
                         const err = new Error('boop');
                         ackOrNack(err, {strategy: 'unknown'});
+                        // Rascal 14.0.0:
+                        // Messages which cannot be recovered by the republish or forward strategies are nacked
+                        // resulting in message loss unless a dead letter is configured.
 
-                        setTimeout(async () => {
-                            await worker.unsubscribe();
-                            await worker.subscribe();
-                        }, 50);
-
-                    } else if (counter === 2) {
-                        ackOrNack();
                         setTimeout(() => resolve(), 50);
+
+                        // setTimeout(async () => {
+                        //     await worker.unsubscribe();
+                        //     await worker.subscribe();
+                        // }, 50);
+
+                    // } else if (counter === 2) {
+                    //     ackOrNack();
+                    //     setTimeout(() => resolve(), 50);
                     } else {
                         reject('should not have gotten here');
                     }
@@ -367,7 +374,7 @@ describe('QueueWorker', () => {
                 }.bind(worker);
 
                 // Fire the message
-                app.services.queue.publishMessage("unittests", "explode", { options: { expiration: 100 }});
+                app.services.queue.publishMessage("unittests", "explode", { options: { expiration: 1000 }});
             });
 
             // Disconnect

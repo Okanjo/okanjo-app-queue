@@ -47,7 +47,8 @@ module.exports = {
                                 limit: 10,
                                 counter: "shared"
                             },
-                            deferCloseChannel: 5,
+                            // deferCloseChannel: 5,    // removed in rascal 14
+                            closeTimeout: 5             // https://github.com/guidesmiths/rascal/issues/171
                         }
                     },
                     publications: {
