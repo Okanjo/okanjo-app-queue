@@ -26,7 +26,7 @@ class QueueService {
         this.broker = null; // set on connect
 
         // Register the connection with the app
-        app._serviceConnectors.push(async () => {
+        app.registerServiceConnector(async () => {
             await this.connect();
         });
     }
